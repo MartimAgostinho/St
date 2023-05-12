@@ -1,0 +1,45 @@
+Telecommunication Systems 2022 / 2023
+Practical class:  P0
+Students 00000 / 00000
+
+List the sending variables and functions (part 1) and the receiving variables and functions (part 2) of the last protocol implemented. If the last protocol is incomplete, list the sending and receiving variables and functions of the two last protocols implemented.
+
+Example for the Utopian protocol:
+
+
+Protocol:  Utopian (0)
+
+
+1. Sender
+
+File
+Utopic_snd.java
+
+
+State variables
+* next_frame_to_send
+Sequence number of the next DATA frame to send
+
+
+Received events / Action
+* start_simulation
+Application start / Send the first DATA frame
+* handle_Data_end
+Ended sending DATA frame / Send next DATA frame
+
+
+2. Receiver
+
+File
+Utopic_rcv.java
+
+
+State variables
+* frame_expected
+Expected sequence number
+
+
+Received events / Action
+* from_physical_layer
+Handle frames:
+* DATA (fields seq and info) / Send data to network layer

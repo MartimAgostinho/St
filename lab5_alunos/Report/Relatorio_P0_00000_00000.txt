@@ -1,0 +1,42 @@
+Sistemas de Telecomunicacoes  2022 / 2023
+Aula pratica:  P0
+Alunos   00000 / 00000
+
+Indique as variáveis e funções usadas para enviar dados (parte 1) e para receber dados (parte 2) do último protocolo realizado. Caso o último protocolo esteja incompleto, indique as variáveis e funções para enviar e receber dados dos dois últimos protocolos implementados.
+
+Exemplo para o protocolo Utópico:
+
+
+Protocolo:  Utopico (0)
+
+1.	Emissao
+
+Ficheiro
+Utopic_snd.java
+
+Variaveis de estado
+*	next_frame_to_send
+Numero de sequencia da proxima trama DATA a enviar
+
+Eventos recebidos / Acao
+*	start_simulation
+Arranque da aplicacao / Envia primeira trama DATA
+*	handle_Data_end
+Fim de envio de trama DATA / Envia trama DATA
+
+
+2.	Rececao
+
+Ficheiro
+Utopic_rcv.java
+
+
+Variaveis de estado
+*	frame_expected
+Numero de sequencia esperado
+
+
+Eventos recebidos / Acao
+*	from_physical_layer
+Recebe tramas:
+?	DATA (campos seq e info) / Envia para camada rede
