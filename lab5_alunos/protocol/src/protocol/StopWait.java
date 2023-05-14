@@ -14,14 +14,17 @@ import terminal.Terminal;
 /**
  * Protocol 3 : Stop & Wait protocol
  * 
- * @author 62964 Martim Agostinho
+ * @author ????? (Put here your students' numbers)
  */
 public class StopWait extends Base_Protocol implements Callbacks {
 
     public StopWait(Simulator _sim, NetworkLayer _net) {
         super(_sim, _net);      // Calls the constructor of Base_Protocol
-        frame_expected = 0;
         next_frame_to_send = 0;        
+        frame_expected = 0;
+
+        // Initialize here all variables
+        // ...
     }
 
     /**
@@ -32,8 +35,6 @@ public class StopWait extends Base_Protocol implements Callbacks {
     public void start_simulation(long time) {
         sim.Log("\nStop&Wait Protocol\n\n");
         send_next_data_packet();    // Start sending the first packet
-
-        //sim.Log("\nNot implemented yet\n\n");    
     }
 
     /**
@@ -53,8 +54,9 @@ public class StopWait extends Base_Protocol implements Callbacks {
      */
     @Override
     public void handle_Data_Timer(long time, int key) {
-        sim.Log("handle_Data_Timer Seq"+ key +":\n"+"Packet: "+CurrentPacket+"\n");        
-        send_packet(CurrentPacket);    
+        sim.Log("Resending packet\n");
+        send_packet(CurrentPacket);
+
     }
     
     /**
@@ -63,17 +65,11 @@ public class StopWait extends Base_Protocol implements Callbacks {
      */
     @Override
     public void handle_ack_Timer(long time) {
-        sim.Log("ACK Timer ended sending ACK\n");
-         Frame ack_frame = Frame.new_Ack_Frame(ACK_frame.seq(), ACK_frame.rcvbufsize());
-            sim.to_physical_layer(ack_frame, false /* do not interrupt an ongoing transmission*/);
-            
-            if (ACK_frame.seq() != prev_seq(frame_expected) ) {    // Check the sequence number
-                // Send the frame to the network layer
-                //frame_expected = frame.seq();
-                sim.Log("Error frame seq not expected\n"
-                        + "Expected seq: "+frame_expected+"\n"
-                                + "Frame recieved:"+ACK_frame.seq()+"\n");
-            }
+        sim.Log("ACK timer ended. Sending ACK\n");
+                
+        Frame ack_frame = Frame.new_Ack_Frame(last_DataF_rcv.seq(), last_DataF_rcv.rcvbufsize());
+        sim.to_physical_layer(ack_frame, false /* do not interrupt an ongoing transmission*/);
+        
     }
 
     /**
@@ -83,38 +79,36 @@ public class StopWait extends Base_Protocol implements Callbacks {
      */
     @Override
     public void from_physical_layer(long time, Frame frame) {
-        sim.Log("from_physical_layer \n");
-        if (frame.kind() == Frame.DATA_FRAME) {     // Check the frame kind
-            DataFrameIF dframe= frame;  // Auxiliary variable to access the Data frame fields.
-
-            if (!sim.isactive_ack_timer() ){//ativar o timer do ACK
-                sim.start_ack_timer();
-                ACK_frame = dframe;
-            }
-            if (dframe.seq() == frame_expected) {    // Check the sequence number
+        sim.Log("Recieving frames...\n");
+        if(frame.kind() == Frame.DATA_FRAME){
+            sim.Log("Data Frame\n");
+            sim.start_ack_timer();
+            last_DataF_rcv = frame;  // Auxiliary variable to access the Data frame fields.
+            
+            if (last_DataF_rcv.seq() == frame_expected) {    // Check the sequence number
                 // Send the frame to the network layer
-                if (net.to_network_layer(dframe.info())){
-                   // prev_frame = frame_expected;
+                if (net.to_network_layer(last_DataF_rcv.info())){
                     frame_expected = next_seq(frame_expected);
                 }
             }else{ 
                 //frame_expected = frame.seq();
                 sim.Log("Error frame seq not expected\n"
                         + "Expected seq: "+frame_expected+"\n"
-                                + "Frame recieved:"+dframe.seq()+"\n");
+                                + "Frame recieved:"+last_DataF_rcv.seq()+"\n");
             }
             
-        }
-        else if(frame.kind() == Frame.ACK_FRAME){
-            //AckFrameIF aframe= frame;  // Auxiliary variable to access the Ack frame fields.
+            if( last_DataF_rcv.ack() != prev_seq(0) ){//problematico
+                sim.Log("With piggy backing\n");
+                handle_ack(last_DataF_rcv.ack());
+                
+            }
+        }else if(frame.kind() == Frame.ACK_FRAME){
+            sim.Log("Ack Frame\n");
+            AckFrameIF aframe= frame;
+            handle_ack(aframe.ack());
             
-            sim.cancel_data_timer( next_frame_to_send );
-            next_frame_to_send = next_seq(next_frame_to_send);
-
-            send_next_data_packet();
-        }else{
-            sim.Log("Error: not ACK or DATA\n");
-        }
+        }else{ sim.Log("Error: not ack or Data\n"); }
+        
     }
 
     /**
@@ -126,9 +120,17 @@ public class StopWait extends Base_Protocol implements Callbacks {
         sim.Log("Stopping simulation\n");
     }
     
+    private void handle_ack(int ack){
+    
+        //TODO: ver se ack ]e o int certo
+        sim.cancel_data_timer( next_frame_to_send );
+        next_frame_to_send = next_seq(next_frame_to_send);
+        send_next_data_packet();
+    }
+    
     private void send_next_data_packet() {
         
-        CurrentPacket= net.from_network_layer(); //Pacote
+        CurrentPacket = net.from_network_layer(); //Pacote
         if (CurrentPacket != null /*Significa que nao ha mais*/ ) {
             send_packet(CurrentPacket);
         }
@@ -136,33 +138,24 @@ public class StopWait extends Base_Protocol implements Callbacks {
     
     private void send_packet(String packet) {
         //Criar frame
-        int ack = prev_seq(0);
+        int ack  = sim.isactive_ack_timer() ? last_DataF_rcv.seq() : prev_seq(0); //saber se ha ou nao piggybacking
         
-        if( sim.isactive_ack_timer() ){
-            sim.cancel_ack_timer();
-            ack = ACK_frame.seq();
-            sim.Log("PiggyBacking\n");
-            if( ack != frame_expected ){
-                ack = prev_seq(0);
-                sim.Log("Error frame seq not expected\n"
-                        + "Expected seq: "+frame_expected+"\n"
-                                + "Frame recieved:"+ACK_frame.seq()+"\n");
-            }
-        }
-        Frame frame= Frame.new_Data_Frame(next_frame_to_send /*seq*/, 
-                                ack , 
-                        net.get_recvbuffsize() /* returns the buffer space available in the network layer */,
-                        packet);
+        Frame frame = Frame.new_Data_Frame(next_frame_to_send /*seq*/, 
+                    ack/* ack= the one before 0 */, 
+                    net.get_recvbuffsize() /* returns the buffer space available in the network layer */,
+                    packet);
+        sim.to_physical_layer(frame, false /* do not interrupt an ongoing transmission*/);
         
-        sim.to_physical_layer(frame, false /* do not interrupt an ongoing transmission*/);  
     }
     
-    private DataFrameIF ACK_frame;
-    private String CurrentPacket;
-    private int next_frame_to_send;
-    //private int prev_frame;
-    private int frame_expected;
     /* Variables */
+    
+    
+    private int next_frame_to_send;  //to get 
+    private DataFrameIF last_DataF_rcv;   //
+    private String CurrentPacket;  //to send
+    private int frame_expected;
+
     
     /**
      * Reference to the simulator (Terminal), to get the configuration and send commands

@@ -94,7 +94,7 @@ public class Simplex_snd extends Base_Protocol implements Callbacks {
     
     private void send_next_data_packet() {
         
-        CurrentPacket= net.from_network_layer(); //Pacote
+        CurrentPacket = net.from_network_layer(); //Pacote
         if (CurrentPacket != null /*Significa que nao ha mais*/ ) {
             send_packet(CurrentPacket);
         }
