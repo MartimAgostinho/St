@@ -97,7 +97,7 @@ public class StopWait extends Base_Protocol implements Callbacks {
                                 + "Frame recieved:"+last_DataF_rcv.seq()+"\n");
             }
             
-            if( last_DataF_rcv.ack() != prev_seq(0) ){//problematico
+            if( last_DataF_rcv.ack() == next_frame_to_send ){//problematico
                 sim.Log("With piggy backing\n");
                 handle_ack(last_DataF_rcv.ack());
                 
@@ -138,7 +138,7 @@ public class StopWait extends Base_Protocol implements Callbacks {
     
     private void send_packet(String packet) {
         //Criar frame
-        int ack  = sim.isactive_ack_timer() ? last_DataF_rcv.seq() : prev_seq(0); //saber se ha ou nao piggybacking
+        int ack  =  last_DataF_rcv == null ? prev_seq(0) : last_DataF_rcv.seq();//sim.isactive_ack_timer() ? last_DataF_rcv.seq() : prev_seq(0); //saber se ha ou nao piggybacking
         
         Frame frame = Frame.new_Data_Frame(next_frame_to_send /*seq*/, 
                     ack/* ack= the one before 0 */, 
@@ -151,12 +151,11 @@ public class StopWait extends Base_Protocol implements Callbacks {
     /* Variables */
     
     
-    private int next_frame_to_send;  //to get 
-    private DataFrameIF last_DataF_rcv;   //
-    private String CurrentPacket;  //to send
+    private int next_frame_to_send;      //to get 
+    private DataFrameIF last_DataF_rcv; //
+    private String CurrentPacket;
     private int frame_expected;
 
-    
     /**
      * Reference to the simulator (Terminal), to get the configuration and send commands
      */
@@ -166,5 +165,4 @@ public class StopWait extends Base_Protocol implements Callbacks {
      * Reference to the network layer, to send a receive packets
      */
     //final NetworkLayer net;    -  Inherited from Base_Protocol
-    
 }
