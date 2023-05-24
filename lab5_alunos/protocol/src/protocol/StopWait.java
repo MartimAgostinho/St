@@ -14,7 +14,7 @@ import terminal.Terminal;
 /**
  * Protocol 3 : Stop & Wait protocol
  * 
- * @author ????? (Put here your students' numbers)
+ * @author Martim Agostinho 62964
  */
 public class StopWait extends Base_Protocol implements Callbacks {
 
@@ -145,11 +145,9 @@ public class StopWait extends Base_Protocol implements Callbacks {
                     net.get_recvbuffsize() /* returns the buffer space available in the network layer */,
                     packet);
         sim.to_physical_layer(frame, false /* do not interrupt an ongoing transmission*/);
-        
     }
     
     /* Variables */
-    
     
     private int next_frame_to_send;      //to get 
     private DataFrameIF last_DataF_rcv; //
