@@ -70,6 +70,7 @@ public class GoBackN extends Base_Protocol implements Callbacks {
     @Override
     public void handle_Data_Timer(long time, int key) {
         //sim.Log("handle_Data_Timer not implemented\n");
+        
         roll_back_it( key );
         send_next_data_packet();
         //TODO: descobir Cancelar proximos data timers???
@@ -126,38 +127,39 @@ public class GoBackN extends Base_Protocol implements Callbacks {
                     between(dframe_expected  , dframe.seq() , add_seq(dframe_expected, win_size) ) 
                     && !retrans_state ){
             
-                sim.Log("Sending NAK\n");
+                sim.Log("Sending NAK frame was lost\n");
                 send_NAK(dframe_expected);
+               // sim.Log("dframe_ex"+dframe_expected+"\n");
                 retrans_state = true;
             
             //ACK was lost
-            }else{
-                //TODO: Resend ACK 
-                //ACK.seq == prev_seq( dframe_expected.seq() )
+            }else if( !retrans_state ) {//antes era um else 
+
                 send_ack();
                 sim.Log("Ack frame was lost\n");
+            }else{
+
+                sim.Log("Retrans state\n");
             }
 
             
         }else if(frame.kind() == Frame.ACK_FRAME){
             
             AckFrameIF aframe = frame;
-            sim.Log("ACK n:"+aframe.ack()+"\n");
+            //sim.Log("ACK n:"+aframe.ack()+"\n");
             ack_handler( aframe.ack() );
             
             send_next_data_packet();
 
         }else if(frame.kind() == Frame.NAK_FRAME){
-            //basicamente so subtrair ao It, It > 0 e send_next+data_packet
-            NakFrameIF nframe = frame;
-            sim.Log("ACK n:"+nframe.nak()+"\n");
 
-            ack_handler( prev_seq(nframe.nak() ));//ack all prev Data frames
+            NakFrameIF nframe = frame;
+
+            if( nframe.nak() != seq_buff ){             ack_handler( prev_seq(nframe.nak() ));//ack all prev Data frames
+ }
             roll_back_it( nframe.nak() );
             send_next_data_packet();
-
-            sim.Log("handle NAK not Tested\n");
-
+            
         }else{ sim.Log("Error: Not Data or ACK or NAK\n"); }
     }
 
@@ -172,7 +174,8 @@ public class GoBackN extends Base_Protocol implements Callbacks {
     }
 
     private void send_NAK(int seq){
-       // sim.Log("send_NAK not implemented\n");
+
+        sim.cancel_ack_timer();
         Frame frame = Frame.new_Nak_Frame(seq, net.get_recvbuffsize() );
         sim.to_physical_layer(frame, false);
     }
@@ -180,18 +183,11 @@ public class GoBackN extends Base_Protocol implements Callbacks {
     private void send_ack(){
     
         Frame aframe = Frame.new_Ack_Frame( prev_seq( dframe_expected ), net.get_recvbuffsize());
-        
         sim.to_physical_layer(aframe, false);
     
     }
     
     private void send_next_data_packet() {
-    
-        //ver se ha pacotes para mandar 
-            //Nao vao haver pacotes para mandar se
-                //Iterador estiver no fim
-                //Se o pacote que eu for buscar a net for null
-        //mandar o pacote
         
         String tmp_frame = get_next_frame();
         
@@ -199,14 +195,12 @@ public class GoBackN extends Base_Protocol implements Callbacks {
         
         send_Dpacket(tmp_frame);
         next_dframe_ts = next_seq(next_dframe_ts); 
-        //sim.Log("WTF"+next_dframe_ts+"\n");
-
     }
     
     private String get_next_frame(){
         
         if( it_buff >= win_size ){ //ja mendei todos os pacotes
-            sim.Log("it_buff >= win_size\n"); 
+            sim.Log("Buffer is full\n"); 
             return null;/*temporario*/
         }
 
@@ -230,6 +224,7 @@ public class GoBackN extends Base_Protocol implements Callbacks {
                     ack/* ack= the one before 0 */, 
                     net.get_recvbuffsize() /* returns the buffer space available in the network layer */,
                     packet);
+        
         sim.to_physical_layer(frame, false /* do not interrupt an ongoing transmission*/);
      }
     
@@ -244,14 +239,14 @@ public class GoBackN extends Base_Protocol implements Callbacks {
          //Shifts array dist unities to the left, other slots are now null
          System.arraycopy(sending_buffer, dist + 1  , aux_buff, 0 , win_size - (dist + 1) );
          
-         
-         for( i = seq; i != seq_buff; i = prev_seq(i) ){
-             sim.cancel_data_timer(i);
-         }
+        if( between(seq_buff  , seq , add_seq(seq_buff, win_size) ) ){         
+            for( i = seq; i != seq_buff; i = prev_seq(i) ){
+                sim.cancel_data_timer(i);
+            }
          sim.cancel_data_timer(i);
+        }
          
-         it_buff -= dist+1;
-         //sim.Log("it_buff "+it_buff+"\n");
+         it_buff -= dist + 1;
          sending_buffer = aux_buff;
          seq_buff = next_seq( seq );
      }
@@ -260,24 +255,16 @@ public class GoBackN extends Base_Protocol implements Callbacks {
     private void roll_back_it( int Data_seq ){
          //iterar sending_buff till == Data_seq
          
-         it_buff = diff_seq(Data_seq, seq_buff);
+                 //cancelar todos os timer desdo do data atual ate ao ultimo data que mandei
+        for( int i = Data_seq; i != next_dframe_ts; i = next_seq(i) ){
+            sim.cancel_data_timer(i);
+        }
+         
+         it_buff = 0;
          next_dframe_ts = Data_seq;
          
     }
-    
-    //In data rcv window
-    /*
-    private boolean is_in_window(int seq){
-    
-        //int inf,sup;
-        
-        
-        if( between(dframe_expected  , seq ,  ) ){
-            return true;
-        }
-        return false;
-    }
-    */
+
     /* Variables */
     
     private String[] sending_buffer;
