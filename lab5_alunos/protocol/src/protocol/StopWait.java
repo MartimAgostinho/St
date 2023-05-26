@@ -97,7 +97,7 @@ public class StopWait extends Base_Protocol implements Callbacks {
                                 + "Frame recieved:"+last_DataF_rcv.seq()+"\n");
             }
             
-            if( last_DataF_rcv.ack() == next_frame_to_send ){//problematico
+            if( last_DataF_rcv.ack() == next_frame_to_send ){
                 sim.Log("With piggy backing\n");
                 handle_ack(last_DataF_rcv.ack());
                 

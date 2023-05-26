@@ -28,7 +28,6 @@ public class GoBackN extends Base_Protocol implements Callbacks {
         win_size = sim.get_send_window();//+1?
         retrans_state = false;
         sending_buffer = new String[win_size];
-        ack_expected = 0;
         seq_buff = 0;
         // Initialize here all variables
         // ...
@@ -42,6 +41,8 @@ public class GoBackN extends Base_Protocol implements Callbacks {
     @Override
     public void start_simulation(long time) {
         sim.Log("\nGo-Back-N Protocol\n\n");
+        sim.Log("win_size: "+ win_size+"\n");
+        
        // sim.Log("\nNot implemented yet\n\n");
         send_next_data_packet();
     }
@@ -98,7 +99,7 @@ public class GoBackN extends Base_Protocol implements Callbacks {
      */
     @Override
     public void from_physical_layer(long time, Frame frame) {
-        
+        //FALTA PIGGYBACKING
         sim.Log("Recieving frame, ");
         if(frame.kind() == Frame.DATA_FRAME){
             
@@ -110,6 +111,21 @@ public class GoBackN extends Base_Protocol implements Callbacks {
                 //Mudar frame expected -> prev_seq * Window size
             sim.Log("Data Frame\n");
             DataFrameIF dframe = frame;
+            
+            //sim.Log("Piggy \n"+prev_seq(next_dframe_ts)+"\n"+dframe.ack()+"\n"+add_seq(prev_seq( next_dframe_ts ), it_buff - 1) +"\n");
+
+            if( between(
+                    subt_seq(prev_seq( next_dframe_ts ), it_buff - 1) ,
+                    dframe.ack(),
+                    next_dframe_ts ) 
+                    ){
+                
+                sim.Log("DEBUG: \nlower: "+next_dframe_ts+"\nupper: "+add_seq(next_dframe_ts, win_size)+"\n");
+                sim.Log("Piggybacking! \n");
+
+                ack_handler( dframe.ack() );
+                send_next_data_packet();
+            }
             
             if( dframe_expected == dframe.seq() ){//Verify if its the frame Im expecting
                 
@@ -127,7 +143,7 @@ public class GoBackN extends Base_Protocol implements Callbacks {
                     between(dframe_expected  , dframe.seq() , add_seq(dframe_expected, win_size) ) 
                     && !retrans_state ){
             
-                sim.Log("Sending NAK frame was lost\n");
+                sim.Log("Sending NAK, frame was lost\n");
                 send_NAK(dframe_expected);
                // sim.Log("dframe_ex"+dframe_expected+"\n");
                 retrans_state = true;
@@ -146,7 +162,7 @@ public class GoBackN extends Base_Protocol implements Callbacks {
         }else if(frame.kind() == Frame.ACK_FRAME){
             
             AckFrameIF aframe = frame;
-            //sim.Log("ACK n:"+aframe.ack()+"\n");
+            sim.Log("ACK n:"+aframe.ack()+"\n");
             ack_handler( aframe.ack() );
             
             send_next_data_packet();
@@ -155,8 +171,10 @@ public class GoBackN extends Base_Protocol implements Callbacks {
 
             NakFrameIF nframe = frame;
 
-            if( nframe.nak() != seq_buff ){             ack_handler( prev_seq(nframe.nak() ));//ack all prev Data frames
- }
+            if( nframe.nak() != seq_buff ){             
+                ack_handler( prev_seq(nframe.nak() ));//ack all prev Data frames
+            }
+            
             roll_back_it( nframe.nak() );
             send_next_data_packet();
             
@@ -178,6 +196,7 @@ public class GoBackN extends Base_Protocol implements Callbacks {
         sim.cancel_ack_timer();
         Frame frame = Frame.new_Nak_Frame(seq, net.get_recvbuffsize() );
         sim.to_physical_layer(frame, false);
+        
     }
    
     private void send_ack(){
@@ -218,6 +237,7 @@ public class GoBackN extends Base_Protocol implements Callbacks {
      private void send_Dpacket(String packet) {
         //Criar frame
         
+        sim.cancel_ack_timer();
         int ack = prev_seq(dframe_expected);
         
         Frame frame = Frame.new_Data_Frame(next_dframe_ts /*seq*/, 
@@ -232,12 +252,31 @@ public class GoBackN extends Base_Protocol implements Callbacks {
      //rearrange buffer
      private void ack_handler(int seq){
      
+         //se estiver fora da janela ja ackned 
+         if( !between(
+                    subt_seq(prev_seq( next_dframe_ts ), it_buff - 1) ,
+                    seq,
+                    next_dframe_ts )
+                    ){
+             sim.Log("Out of window\n"+prev_seq(next_dframe_ts)+seq+add_seq(prev_seq( next_dframe_ts ), it_buff - 1) +"\n");
+             return;
+         }
+         
          String[] aux_buff = new String[ sending_buffer.length ];
-         int dist = diff_seq(seq, seq_buff);
+         int dist = diff_seq( seq_buff,seq);
          int i;
+         
+         /*
+         sim.Log("DEBUG ACK HANDLRE \n");
+         for (String element: sending_buffer) { sim.Log(element);}
+         sim.Log("\n info: \ninicio:"+(dist + 1)+"\ntamanho\n"+( win_size - (dist + 1) ));
+         */
          
          //Shifts array dist unities to the left, other slots are now null
          System.arraycopy(sending_buffer, dist + 1  , aux_buff, 0 , win_size - (dist + 1) );
+         
+         //sim.Log("\nDEBUG ACK HANDLRE \n");
+         //for (String element: sending_buffer) { sim.Log(element);}
          
         if( between(seq_buff  , seq , add_seq(seq_buff, win_size) ) ){         
             for( i = seq; i != seq_buff; i = prev_seq(i) ){
@@ -254,12 +293,14 @@ public class GoBackN extends Base_Protocol implements Callbacks {
     //Updates it_buff for the right data_seq
     private void roll_back_it( int Data_seq ){
          //iterar sending_buff till == Data_seq
-         
-                 //cancelar todos os timer desdo do data atual ate ao ultimo data que mandei
-        for( int i = Data_seq; i != next_dframe_ts; i = next_seq(i) ){
+
+        sim.Log("Rolling back\n");
+        //cancelar todos os timer desdo do data atual ate ao ultimo data que mandei
+        for( int i = 0; i != sim.get_max_sequence(); i = next_seq(i) ){
             sim.cancel_data_timer(i);
         }
-         
+        sim.cancel_data_timer(7);
+
          it_buff = 0;
          next_dframe_ts = Data_seq;
          
@@ -271,7 +312,6 @@ public class GoBackN extends Base_Protocol implements Callbacks {
     private int it_buff;                 //Iterador do buffer
     private int seq_buff;               //sequencia do primeiro pacote do buffer
     private int dframe_expected;       //
-    private int ack_expected;         //ACK Im expecting to recieve 
     private int next_dframe_ts;      //Sequence of the next data frame to send
     private int win_size;           //Window size
     private boolean retrans_state; //estado de retransmissao
